@@ -15,7 +15,7 @@ main()
     char pathname[MAXPATHLEN];
     int t = 1;
     getcwd(pathname,MAXPATHLEN);
-    printf("PWD = %s\n",pathname);
+
     count = scandir(pathname, &files, file_select, alphasort);
     
     /* No files in Dir */
@@ -25,15 +25,16 @@ main()
         exit(0);
     }
     
-    printf("Number of files = %d\n",count);
-    
     for (i=1;i<count+1;++i)
     {
-        printf("\n%s",files[i-1]->d_name);
+	if(strcmp(".",files[i-1]->d_name)!=0 && strcmp("..",files[i-1]->d_name)!=0)
+	{
+        	printf("%s\n",files[i-1]->d_name);
+	}
+
     }
-    
-    printf("\n");
 }
+
 int file_select(struct direct *entry)
 {
 return (1);
