@@ -8,7 +8,7 @@ int main( int argc, char *argv[] )
   FILE *fp;
   char path[1035];
 
-  /* Open the command for reading. */
+  /* Open the command for reaading. */
   fp = popen("whoami", "r");
   if (fp == NULL) {
     printf("Failed to run command\n" );
