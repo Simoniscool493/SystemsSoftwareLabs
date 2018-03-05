@@ -1,5 +1,5 @@
-#include<stdio.h> 
-#include<fcntl.h>
+#include <stdio.h> 
+#include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/types.h> 
@@ -10,24 +10,24 @@
 
 #include "fifoWrapper.h"
 #include "recentFilesChangedWrapper.h"
+#include "timeWrapper.h"
 
-void BackupAndUpdate();
+void BackupLiveSite();
+void UpdateLiveSite();
 void LogChangesToIntraSite(int shouldCopyFiles);
 
+int IsTimeToBackup();
 void BackupAndUpdateIfTimeTo();
-void ChangeLogIfTimeTo();
+void LogChangesToIntraSiteIfTimeTo();
 
 void ForkFifoProcess();
 void SetToDaemon();
 void Log(char* message);
 
-time_t mostRecentBackupTime;
 time_t mostRecentChangelogTime;
-time_t mostRecentLiveSiteUpdateTime;
+time_t nextTimeToBackup;
 
-int backupIntervalInSeconds = 999;
-int changeLogIntervalInSeconds = 999;
-int liveSiteUpdateIntervalInSeconds = 999;
+int changeLogIntervalInSeconds = 2;
 
 char* liveDir = "/home/simon/Documents/SystemsSoftwareLabs/workshop/fifoPipe/website/liveSite/";	
 char* backupDir = "/home/simon/Documents/SystemsSoftwareLabs/workshop/fifoPipe/website/backup/";
@@ -37,9 +37,8 @@ char* logFileLocation = "/home/simon/Documents/SystemsSoftwareLabs/workshop/fifo
 int main()
 {	
 	ForkFifoProcess();
-	mostRecentBackupTime = GetCurrentTimeRaw();
+	nextTimeToBackup = GetTimeAtRelativeDay(0,10,0,0);
 	mostRecentChangelogTime = GetCurrentTimeRaw();
-	mostRecentLiveSiteUpdateTime = GetCurrentTimeRaw();
 
 	int fifo_server = OpenFIFO("fifo_server");
 	int pid = fork();
@@ -63,7 +62,8 @@ int main()
 				if(data==1)
 				{
 					printf("Manual Backup and update triggered.\n");
-					BackupAndUpdate();
+					BackupLiveSite();
+					UpdateLiveSite();
 				}
 				else if(data==2)
 				{
@@ -79,7 +79,7 @@ int main()
 			}
 			
 			BackupAndUpdateIfTimeTo();
-			ChangeLogIfTimeTo();
+			LogChangesToIntraSiteIfTimeTo();
 
 			sleep(1);
 		}
@@ -91,33 +91,18 @@ int main()
 	return 0;
 }
 
-void ForkFifoProcess()
-{
-	pid_t pid=fork();
-	
-	if (pid==0) 
-	{
-		CreateFIFO("fifo_server"); 
-		exit(0);
-	}
-	else 
-	{ 
-		waitpid(pid,0,0); 
-	}
-}
-
 void BackupAndUpdateIfTimeTo()
 {
-	int secsPassed = difftime(GetCurrentTimeRaw(),mostRecentBackupTime);
-	
-	if(secsPassed>backupIntervalInSeconds)
+	if(IsTimeToBackup())
 	{
-		printf("%d seconds have passed. Starting scheduled backup.\n",backupIntervalInSeconds);
-		BackupAndUpdate();
+		printf("Starting scheduled backup and update of live site.\n");
+		BackupLiveSite();
+		UpdateLiveSite();
+		nextTimeToBackup = GetTimeAtRelativeDay(1,10,0,0);
 	}
 }
 
-void ChangeLogIfTimeTo()
+void LogChangesToIntraSiteIfTimeTo()
 {
 	int secsPassed = difftime(GetCurrentTimeRaw(),mostRecentChangelogTime);
 	
@@ -136,10 +121,10 @@ void UpdateLiveSite()
 void LogChangesToIntraSite(int shouldCopyFiles)
 {	
 	int count;
-	char* files[GetFileCountFromGivenDirectory(intraDir)];
 	char* changeLog;
-	GetFilesAfterTimeFromGivenDirectory(intraDir,files,&count,mostRecentChangelogTime,&changeLog,0);
-	
+	char* files [GetFileCountFromGivenDirectory(liveDir)];
+	GetFilesAfterTimeFromGivenDirectory(intraDir,files,&count,mostRecentChangelogTime,&changeLog);
+
 	//PrintStringArray(files,count);
 	
 	if(count>0)
@@ -155,7 +140,7 @@ void LogChangesToIntraSite(int shouldCopyFiles)
 	mostRecentChangelogTime = GetCurrentTimeRaw();
 }
 
-void BackupAndUpdate()
+void BackupLiveSite()
 {	
 	//flock(sourceDir, LOCK_EX);
 	//printf("Directory locked. Sleeping for 20...\n");
@@ -163,15 +148,13 @@ void BackupAndUpdate()
 
 	int count;
 	char* files[GetFileCountFromGivenDirectory(liveDir)];
-	char* log;
-	GetFilesAfterTimeFromGivenDirectory(liveDir,files,&count,mostRecentBackupTime,&log,1);
+	GetFilesFromGivenDirectory(liveDir,files,&count);
+
 	//PrintStringArray(files,count);
 	
 	CopyFiles(files,count,liveDir,backupDir);
 	
-	mostRecentBackupTime = GetCurrentTimeRaw();
 	//flock(sourceDir, LOCK_UN);
-	UpdateLiveSite();
 }
 
 void SetToDaemon()
@@ -199,4 +182,29 @@ void Log(char* message)
 	fp = fopen(logFileLocation,"a");
 	fprintf(fp,message);
 	fclose(fp);
+}
+
+void ForkFifoProcess()
+{
+	pid_t pid=fork();
+	
+	if (pid==0) 
+	{
+		CreateFIFO("fifo_server"); 
+		exit(0);
+	}
+	else 
+	{ 
+		waitpid(pid,0,0); 
+	}
+}
+
+int IsTimeToBackup()
+{
+	if(IsTimeAfter(GetCurrentTimeRaw(),nextTimeToBackup))
+	{
+		return 1;
+	}
+	
+	return 0;
 }

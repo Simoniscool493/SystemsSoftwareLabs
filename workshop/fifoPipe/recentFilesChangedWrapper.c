@@ -9,10 +9,12 @@
 #include <string.h>
 
 #include "recentFilesChangedWrapper.h"
+#include "timeWrapper.h"
 
 char* concat(const char *s1, const char *s2);
 int IsNotDirectoryPointer(char* fileName);
 void PrintLastModifiedResults(char* fileName,char* filePath,int seconds);
+char* LastIndexSubStr(char* stringToSearch,char charToGetLastOf);
 
 void PrintStringArray(char* stringArray[],int length)
 {
@@ -22,8 +24,34 @@ void PrintStringArray(char* stringArray[],int length)
 	}
 }
 
-void GetFilesAfterTimeFromGivenDirectory(char* path,char* modifiedFiles[] ,int* modifiedCount,time_t startTime,char** log,int ignoreTime)
+void GetFilesFromGivenDirectory(char* path,char** files,int* fileCount)
+{
+	int count,i;
+	struct direct **filesStruct;
+	count = scandir(path, &filesStruct, file_select, alphasort);
+	
+	if(count<0)
+	{
+		printf("Scandir error code: %d\n",count);
+		exit(-1);
+	}
+		
+	for(i=0;i<count;i++)
+	{
+		char* name = filesStruct[i]->d_name;
+		
+		if(IsNotDirectoryPointer(name))
+		{
+			files[i] = concat(path,name);
+		}
+	}
+	
+	(*fileCount) = i;
+}
+
+void GetFilesAfterTimeFromGivenDirectory(char* path,char** files,int* modifiedCount,time_t startTime,char** log)
 {		
+	*modifiedCount = 0;
 	char* logBuff = "";
 	char startBuff[20];
 	strftime(startBuff,20,"%Y-%m-%d %H:%M:%S",GetCurrentTimeStructured());
@@ -31,49 +59,31 @@ void GetFilesAfterTimeFromGivenDirectory(char* path,char* modifiedFiles[] ,int* 
 	logBuff = concat(logBuff,startBuff);
 	logBuff = concat(logBuff,"\n");
 
-	int count,i;
-	struct direct **files;
-	
-	count = scandir(path, &files, file_select, alphasort);
-	
+	int count = 0;
+	char** filesBuff;
+	GetFilesFromGivenDirectory(path,filesBuff,&count);
 	printf("Found %d files in directory.\n",count);
-	*modifiedCount = 0;
-
-	if (count == 0)
+	
+	for (int i=0;i<count;++i)
 	{
-		printf("No files in Dir\n");
-		return;
-	}
-	else if(count < 0)
-	{
-		printf("Scandir error code: %d\n",count);
-	}
+		char* pathToCheck = filesBuff[i];
+		time_t time = getFileModifiedTime(pathToCheck);
+		int diff = difftime(startTime, time);	
 
-	for (i=0;i<count;++i)
-	{
-		char* fileName = files[i]->d_name;
-		
-		if(IsNotDirectoryPointer(fileName))
-		{
-			char* pathToCheck = concat(path,fileName);
-			time_t time = getFileModifiedTime(pathToCheck);
-			int diff = difftime(startTime, time);	
+		//PrintLastModifiedResults(fileName,pathToCheck,diff);
 
-			//PrintLastModifiedResults(fileName,pathToCheck,diff);
-
-			if(diff<0 || ignoreTime)
-			{		
-				modifiedFiles[(*modifiedCount)] = fileName;
-				(*modifiedCount)++;
-				
-				char buff[20];
-				strftime(buff,20,"%Y-%m-%d %H:%M:%S",localtime(&time));
-				
-				logBuff = concat(logBuff,fileName);
-				logBuff = concat(logBuff," \n\tLast modified on ");
-				logBuff = concat(logBuff,buff);
-				logBuff = concat(logBuff," by <TODO>\n");
-			}
+		if(diff<0)
+		{		
+			files[(*modifiedCount)] = pathToCheck;
+			(*modifiedCount)++;
+			
+			char buff[20];
+			strftime(buff,20,"%Y-%m-%d %H:%M:%S",localtime(&time));
+			
+			logBuff = concat(logBuff,pathToCheck);
+			logBuff = concat(logBuff," \n\tLast modified on ");
+			logBuff = concat(logBuff,buff);
+			logBuff = concat(logBuff," by <TODO>\n");
 		}
 	}
 	
@@ -141,22 +151,6 @@ time_t getFileModifiedTime(char *path)
 	return time;
 }
 
-time_t GetCurrentTimeRaw()
-{
-	time_t rawtime;
-	time( &rawtime );	
-	
-	return rawtime;
-}
-
-struct tm* GetCurrentTimeStructured()
-{	
-	time_t rawtime;
-	time( &rawtime );	
-
-	return localtime(&rawtime);
-}
-
 char* concat(const char *s1, const char *s2)
 {
     char *result = malloc(strlen(s1)+strlen(s2)+1);
@@ -168,22 +162,17 @@ char* concat(const char *s1, const char *s2)
 
 void CopyFiles(char* files[],int count,char* srcPath,char* destPath)
 {
-	char* tempPermissions="0000";
-
-	char* sourcePaths[count];
 	char* destPaths[count];
-	mode_t oldPermissions[count];
 	
 	for(int i=0;i<count;i++)
 	{
-		sourcePaths[i] = concat(srcPath,files[i]);
-		destPaths[i] = concat(destPath,files[i]);
+		destPaths[i] = concat(destPath,LastIndexSubStr(files[i],'/'));
 	}
 	
 	for(int i=0;i<count;i++)
 	{
 		char ch;
-		FILE* source = fopen(sourcePaths[i], "r");
+		FILE* source = fopen(files[i], "r");
 		remove(destPaths[i]);
 		FILE* dest = fopen(destPaths[i], "w");
 		
@@ -197,4 +186,28 @@ void CopyFiles(char* files[],int count,char* srcPath,char* destPath)
 	}
 }
 
+char* LastIndexSubStr(char* stringToSearch,char charToGetLastOf)
+{
+	int index = -1;
+	int i;
+	for(i=0;stringToSearch[i]!='\0';i++)
+	{
+		if(stringToSearch[i]==charToGetLastOf)
+		{
+			index=i;
+		}
+	}
+	
+	if(index == -1)
+	{
+		printf("Character not found in string.");
+		exit(-1);
+	}
 
+	int length = (i-index)+1;
+	char *output = malloc(length);
+	memcpy(output, &stringToSearch[i], length-1 );
+	output[length] = '\0';
+	
+	return output;
+}

@@ -6,3 +6,4 @@ int OpenFIFO(const char* path);
 int CreateFIFO(const char* path);
 
 #endif
+
