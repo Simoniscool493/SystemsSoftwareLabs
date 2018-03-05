@@ -29,7 +29,6 @@ int main()
 		
 		//printf("2 has elevated and is entering loop\n");
 		
-		int i = 0;
 		while(1)
 		{
 			int seconds = difftime(GetRawTime(), startTime);

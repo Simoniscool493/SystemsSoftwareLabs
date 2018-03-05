@@ -5,49 +5,112 @@
 #include <stdlib.h>
 #include <time.h>
 #include <sys/stat.h>
-// List of functions
+#include <unistd.h>
+#include <string.h>
+
 int file_select();
-char* getFileModifiedTime();
+time_t getFileModifiedTime();
 extern int alphasort();
+void GetFilesFromCurrentWd(char* modifiedFiles[] ,int* modifiedCount);
+time_t GetRawTime();
+struct tm* GetStructuredTime();
+int GetWdCount();
+void PrintStringArray(char* stringArray[]);
 
-main() 
+int main() 
 {
-    int count,i;
-    struct direct **files;
-    
-    char pathname[MAXPATHLEN];
-    int t = 1;
-    getcwd(pathname,MAXPATHLEN);
+	char* files[GetWdCount()];
+	int count;
 
-    count = scandir(pathname, &files, file_select, alphasort);
-    
-    /* No files in Dir */
-    if (count <= 0)
-    {
-        printf("No files in Dir\n");
-        exit(0);
-    }
-    
-    for (i=1;i<count+1;++i)
-    {
-	if(strcmp(".",files[i-1]->d_name)!=0 && strcmp("..",files[i-1]->d_name)!=0)
+	GetFilesFromCurrentWd(files,&count);
+	
+	PrintStringArray(files);
+}
+
+void PrintStringArray(char* stringArray[])
+{
+	for(int i=0;stringArray[i]!=NULL;i++)
 	{
-		char* modifiedTime = getFileModifiedTime(files[i-1]->d_name);
+		printf("%s\n",stringArray[i]);
+	}
+}
 
-        	printf("%s\n\t%s\n",files[i-1]->d_name,modifiedTime);
+void GetFilesFromCurrentWd(char* modifiedFiles[] ,int* modifiedCount)
+{		
+	int count,i;
+	struct direct **files;
+	time_t startTime = GetRawTime();
+	sleep(5);
+
+	char pathname[MAXPATHLEN];
+
+	getcwd(pathname,MAXPATHLEN);
+	
+	count = scandir(pathname, &files, file_select, alphasort);
+
+	*modifiedCount = 0;
+
+	if (count <= 0)
+	{
+		printf("No files in Dir\n");
+		exit(0);
 	}
 
-    }
+	for (i=1;i<count+1;++i)
+	{
+		if(strcmp(".",files[i-1]->d_name)!=0 && strcmp("..",files[i-1]->d_name)!=0)
+		{
+			time_t time = getFileModifiedTime(files[i-1]->d_name);
+			int diff = difftime(startTime, time);		
+
+			if(diff<0)
+			{		
+				modifiedFiles[(*modifiedCount)] = files[i-1]->d_name;
+				(*modifiedCount)++;
+			}
+		}
+	}
+}
+
+int GetWdCount()
+{
+	int count;
+	struct direct **files;
+	char pathname[MAXPATHLEN];
+
+	getcwd(pathname,MAXPATHLEN);
+	count = scandir(pathname, &files, file_select, alphasort);
+	
+	return count;
 }
 
 int file_select(struct direct *entry)
 {
-return (1);
+	return (1);
 }
 
-char* getFileModifiedTime(char *path) {
-    struct stat attr;
-    stat(path, &attr);
-    //printf("Last modified time: %s", ctime(&attr.st_mtime));
-    return ctime(&attr.st_mtime);
+time_t getFileModifiedTime(char *path) 
+{
+	struct stat attr;
+	stat(path, &attr);
+
+	time_t time = attr.st_mtime;
+
+	return time;
+}
+
+time_t GetRawTime()
+{
+	time_t rawtime;
+	time( &rawtime );	
+	
+	return rawtime;
+}
+
+struct tm* GetStructuredTime()
+{	
+	time_t rawtime;
+	time( &rawtime );	
+
+	return localtime(&rawtime);
 }
