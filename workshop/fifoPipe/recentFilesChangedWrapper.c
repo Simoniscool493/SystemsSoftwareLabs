@@ -18,23 +18,31 @@ char* LastIndexSubStr(char* stringToSearch,char charToGetLastOf);
 
 void PrintStringArray(char* stringArray[],int length)
 {
+	printf("PrintStringArray.\n");
+
 	for(int i=0;i<length;i++)
 	{
 		printf("%s\n",stringArray[i]);
 	}
 }
 
-void GetFilesFromGivenDirectory(char* path,char** files,int* fileCount)
+char** GetFilesFromGivenDirectory(char* path,int* fileCount)
 {
+	printf("GetFilesFromGivenDirectory.\n");
+
 	int count,i;
 	struct direct **filesStruct;
 	count = scandir(path, &filesStruct, file_select, alphasort);
+	
+	char ** files = malloc(count * sizeof(char*));
 	
 	if(count<0)
 	{
 		printf("Scandir error code: %d\n",count);
 		exit(-1);
 	}
+	
+	int j = 0;
 		
 	for(i=0;i<count;i++)
 	{
@@ -42,15 +50,22 @@ void GetFilesFromGivenDirectory(char* path,char** files,int* fileCount)
 		
 		if(IsNotDirectoryPointer(name))
 		{
-			files[i] = concat(path,name);
+			printf("files[%d] is %s\n",i,name);
+			files[j] = concat(path,name);
+			j++;
 		}
 	}
 	
-	(*fileCount) = i;
+	printf("Filecount is %d\n",j);
+	printf("In getFiles, first file is %s\n",files[0]);
+	(*fileCount) = j;
+	return files;
 }
 
-void GetFilesAfterTimeFromGivenDirectory(char* path,char** files,int* modifiedCount,time_t startTime,char** log)
+char** GetFilesAfterTimeFromGivenDirectory(char* path,int* modifiedCount,time_t startTime,char** log)
 {		
+	printf("GetFilesAfterTimeFromGivenDirectory.\n");
+
 	*modifiedCount = 0;
 	char* logBuff = "";
 	char startBuff[20];
@@ -60,9 +75,10 @@ void GetFilesAfterTimeFromGivenDirectory(char* path,char** files,int* modifiedCo
 	logBuff = concat(logBuff,"\n");
 
 	int count = 0;
-	char** filesBuff;
-	GetFilesFromGivenDirectory(path,filesBuff,&count);
+	char** filesBuff = GetFilesFromGivenDirectory(path,&count);
 	printf("Found %d files in directory.\n",count);
+	
+	char ** files = malloc(count * sizeof(char*));
 	
 	for (int i=0;i<count;++i)
 	{
@@ -75,7 +91,7 @@ void GetFilesAfterTimeFromGivenDirectory(char* path,char** files,int* modifiedCo
 		if(diff<0)
 		{		
 			files[(*modifiedCount)] = pathToCheck;
-			(*modifiedCount)++;
+			*(modifiedCount)++;
 			
 			char buff[20];
 			strftime(buff,20,"%Y-%m-%d %H:%M:%S",localtime(&time));
@@ -89,11 +105,14 @@ void GetFilesAfterTimeFromGivenDirectory(char* path,char** files,int* modifiedCo
 	
 	printf("Found %d modified files in directory. \n",*modifiedCount);
 	*(log) = logBuff;
+	return files;
 	//printf("Created log message: %s",log);
 }
 
 int IsNotDirectoryPointer(char* fileName)
 {
+	printf("IsNotDirectoryPointer.\n");
+
 	if(strcmp(".",fileName)!=0 && strcmp("..",fileName)!=0)
 	{
 		return 1;
@@ -104,6 +123,8 @@ int IsNotDirectoryPointer(char* fileName)
 
 void PrintLastModifiedResults(char* fileName,char* filePath,int seconds)
 {
+	printf("PrintLastModifiedResults.\n");
+
 	printf("Checking last modified time for filepath: %s\n",filePath);
 	
 	if(seconds>-1)
@@ -118,6 +139,8 @@ void PrintLastModifiedResults(char* fileName,char* filePath,int seconds)
 
 int GetFileCountFromGivenDirectory(char* path)
 {
+	printf("GetFileCountFromGivenDirectory.\n");
+
 	int count,errorCode;
 	struct direct **files;
 
@@ -138,6 +161,8 @@ int file_select(struct direct *entry)
 
 time_t getFileModifiedTime(char *path) 
 {
+	printf("getFileModifiedTime.\n");
+
 	struct stat attr;
 	int errorCode = stat(path, &attr);
 	
@@ -153,6 +178,8 @@ time_t getFileModifiedTime(char *path)
 
 char* concat(const char *s1, const char *s2)
 {
+	printf("concat.\n");
+
     char *result = malloc(strlen(s1)+strlen(s2)+1);
 
     strcpy(result, s1);
@@ -162,10 +189,13 @@ char* concat(const char *s1, const char *s2)
 
 void CopyFiles(char* files[],int count,char* srcPath,char* destPath)
 {
+	printf("CopyFiles.\n");
+
 	char* destPaths[count];
 	
 	for(int i=0;i<count;i++)
 	{
+		printf("file path to concat is %s\n",files[i]);
 		destPaths[i] = concat(destPath,LastIndexSubStr(files[i],'/'));
 	}
 	
@@ -188,6 +218,10 @@ void CopyFiles(char* files[],int count,char* srcPath,char* destPath)
 
 char* LastIndexSubStr(char* stringToSearch,char charToGetLastOf)
 {
+	printf("LastIndexSubStr.\n");
+	printf("String to search is %s\n",stringToSearch);
+	printf("Char to find is %c\n",charToGetLastOf);
+
 	int index = -1;
 	int i;
 	for(i=0;stringToSearch[i]!='\0';i++)
@@ -198,16 +232,24 @@ char* LastIndexSubStr(char* stringToSearch,char charToGetLastOf)
 		}
 	}
 	
+	printf("i is %d\n",i);
+	printf("index is %d\n",index);
+
 	if(index == -1)
 	{
 		printf("Character not found in string.");
 		exit(-1);
 	}
 
-	int length = (i-index)+1;
+	int length = (i-index);
+	
+	printf("length is %d\n",length);
 	char *output = malloc(length);
-	memcpy(output, &stringToSearch[i], length-1 );
+	memcpy(output, stringToSearch+index+1, length);
 	output[length] = '\0';
+	
+	printf("output is %s\n",output);
 	
 	return output;
 }
+

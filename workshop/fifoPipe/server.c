@@ -122,8 +122,7 @@ void LogChangesToIntraSite(int shouldCopyFiles)
 {	
 	int count;
 	char* changeLog;
-	char* files [GetFileCountFromGivenDirectory(liveDir)];
-	GetFilesAfterTimeFromGivenDirectory(intraDir,files,&count,mostRecentChangelogTime,&changeLog);
+	char** files = GetFilesAfterTimeFromGivenDirectory(intraDir,&count,mostRecentChangelogTime,&changeLog);
 
 	//PrintStringArray(files,count);
 	
@@ -142,13 +141,15 @@ void LogChangesToIntraSite(int shouldCopyFiles)
 
 void BackupLiveSite()
 {	
+	printf("BackupLiveSite.\n");
 	//flock(sourceDir, LOCK_EX);
 	//printf("Directory locked. Sleeping for 20...\n");
 	//sleep(20);
 
 	int count;
-	char* files[GetFileCountFromGivenDirectory(liveDir)];
-	GetFilesFromGivenDirectory(liveDir,files,&count);
+	char** files = GetFilesFromGivenDirectory(liveDir,&count);
+	
+	printf("in backup, first file is %s\n",files[0]);
 
 	//PrintStringArray(files,count);
 	
@@ -159,6 +160,8 @@ void BackupLiveSite()
 
 void SetToDaemon()
 {
+	printf("SetToDaemon.\n");
+
 	int errorCode = setsid();
 	if(errorCode < 0)
 	{
@@ -178,6 +181,8 @@ void SetToDaemon()
 
 void Log(char* message)
 {
+	printf("Log.\n");
+
 	FILE* fp;
 	fp = fopen(logFileLocation,"a");
 	fprintf(fp,message);
@@ -186,6 +191,8 @@ void Log(char* message)
 
 void ForkFifoProcess()
 {
+	printf("ForkFifoProcess.\n");
+
 	pid_t pid=fork();
 	
 	if (pid==0) 
@@ -201,6 +208,8 @@ void ForkFifoProcess()
 
 int IsTimeToBackup()
 {
+	printf("IsTimeToBackup.\n");
+	
 	if(IsTimeAfter(GetCurrentTimeRaw(),nextTimeToBackup))
 	{
 		return 1;
@@ -208,3 +217,4 @@ int IsTimeToBackup()
 	
 	return 0;
 }
+
