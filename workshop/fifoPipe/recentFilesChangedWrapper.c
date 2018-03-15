@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <string.h>
+#include <assert.h>
 
 #include "recentFilesChangedWrapper.h"
 #include "timeWrapper.h"
@@ -15,6 +16,13 @@ char* concat(const char *s1, const char *s2);
 int IsNotDirectoryPointer(char* fileName);
 void PrintLastModifiedResults(char* fileName,char* filePath,int seconds);
 char* LastIndexSubStr(char* stringToSearch,char charToGetLastOf);
+char* RemoveMainPath(char* path,char* mainPath);
+char* GetPathFromPathListContaningThisRelativePath(char* path,char* directoryPath,char** list,int listLength,int* wasFound);
+int IsFileNewerThan(char* path1,char* path2);
+char** CombineStringArrays(char** s_one,int sizeOfFirstArray,char** s_two,int sizeOfSecondArray);
+int IsPathDirectory(char *path);
+char** StringSplit(char* string, const char* delimiter,int* totalCount);
+int FileExists(char *path);
 
 void PrintStringArray(char* stringArray[],int length)
 {
@@ -22,7 +30,7 @@ void PrintStringArray(char* stringArray[],int length)
 
 	for(int i=0;i<length;i++)
 	{
-		printf("%s\n",stringArray[i]);
+		printf("\t%s\n",stringArray[i]);
 	}
 }
 
@@ -34,16 +42,18 @@ char** GetFilesFromGivenDirectory(char* path,int* fileCount)
 	struct direct **filesStruct;
 	count = scandir(path, &filesStruct, file_select, alphasort);
 	
-	char ** files = malloc(count * sizeof(char*));
-	
+	char ** files = malloc((count+1) * sizeof(char*));
+	char ** dirs = malloc((count+1) * sizeof(char*));
+
 	if(count<0)
 	{
 		printf("Scandir error code: %d\n",count);
 		exit(-1);
 	}
 	
-	int j = 0;
-		
+	int numFiles = 0;
+	int numDirs = 0;
+
 	for(i=0;i<count;i++)
 	{
 		char* name = filesStruct[i]->d_name;
@@ -51,18 +61,60 @@ char** GetFilesFromGivenDirectory(char* path,int* fileCount)
 		if(IsNotDirectoryPointer(name))
 		{
 			printf("files[%d] is %s\n",i,name);
-			files[j] = concat(path,name);
-			j++;
+			char* fullPath = concat(path,name);
+
+			if(IsPathDirectory(fullPath))
+			{
+				dirs[numDirs] = concat(fullPath,"/");
+				numDirs++;
+			}
+			else
+			{
+				files[numFiles] = fullPath;
+				numFiles++;
+			}
 		}
 	}
 	
-	printf("Filecount is %d\n",j);
-	printf("In getFiles, first file is %s\n",files[0]);
-	(*fileCount) = j;
+	for(i=0;i<numDirs;i++)
+	{
+		printf("printing original string array\n");
+		PrintStringArray(files,numFiles);
+		
+		int curCount = 0;
+		char** folderContents = GetFilesFromGivenDirectory(dirs[i],&curCount);
+		
+		printf("Folder contents is as follows:\n");
+		PrintStringArray(folderContents,curCount);
+
+		files = CombineStringArrays(files,numFiles,folderContents,curCount);
+		
+
+		numFiles+=curCount;
+		
+		printf("printing combined string array\n");
+		PrintStringArray(files,numFiles);
+		free(folderContents);
+	}
+	
+	printf("Filecount is %d\n",numFiles);
+	
+	if(numFiles>0)
+	{
+		printf("In getFiles, first file is %s\n",files[0]);
+	}
+	else
+	{
+		printf("In getFiles, first file was not found because there aren't any.");
+	}
+	
+	free(dirs);
+	
+	(*fileCount) = numFiles;
 	return files;
 }
 
-char** GetFilesAfterTimeFromGivenDirectory(char* path,int* modifiedCount,time_t startTime,char** log)
+char** GetModifiedFilesFromIntraToAddToLiveSite(char* intraDir,char* liveDir,int* modifiedCount,char** log)
 {		
 	printf("GetFilesAfterTimeFromGivenDirectory.\n");
 
@@ -70,42 +122,53 @@ char** GetFilesAfterTimeFromGivenDirectory(char* path,int* modifiedCount,time_t 
 	char* logBuff = "";
 	char startBuff[20];
 	strftime(startBuff,20,"%Y-%m-%d %H:%M:%S",GetCurrentTimeStructured());
-	logBuff = concat(logBuff,"\nChanhelog recorded on ");
+	logBuff = concat(logBuff,"\nChangelog recorded on ");
 	logBuff = concat(logBuff,startBuff);
 	logBuff = concat(logBuff,"\n");
 
-	int count = 0;
-	char** filesBuff = GetFilesFromGivenDirectory(path,&count);
-	printf("Found %d files in directory.\n",count);
+	int countIntra = 0;
+	char** intraFiles = GetFilesFromGivenDirectory(intraDir,&countIntra);
+	printf("Found %d files in intra directory.\n",countIntra);
 	
-	char ** files = malloc(count * sizeof(char*));
+	int countLive = 0;
+	char** liveFiles = GetFilesFromGivenDirectory(liveDir,&countLive);
+	printf("Found %d files in live directory.\n",countLive);
 	
-	for (int i=0;i<count;++i)
+	char ** modifiedFiles = malloc((countIntra+1) * sizeof(char*));
+	printf("allocated modified files\n");
+	
+	for (int i=0;i<countIntra;i++)
 	{
-		char* pathToCheck = filesBuff[i];
-		time_t time = getFileModifiedTime(pathToCheck);
-		int diff = difftime(startTime, time);	
+		printf("intra dir new file check #%d\n",i);
 
-		//PrintLastModifiedResults(fileName,pathToCheck,diff);
+		char* intraPathToCheck = intraFiles[i];
+		printf("intraPathToCheck assigned\n");
 
-		if(diff<0)
-		{		
-			files[(*modifiedCount)] = pathToCheck;
-			*(modifiedCount)++;
-			
-			char buff[20];
-			strftime(buff,20,"%Y-%m-%d %H:%M:%S",localtime(&time));
-			
-			logBuff = concat(logBuff,pathToCheck);
-			logBuff = concat(logBuff," \n\tLast modified on ");
-			logBuff = concat(logBuff,buff);
-			logBuff = concat(logBuff," by <TODO>\n");
+		char* intraRelativePath = RemoveMainPath(intraPathToCheck,intraDir);
+				printf("intraRelativePath assigned\n");
+
+		int wasFound = 0;
+		char* livePathToCheck = GetPathFromPathListContaningThisRelativePath(intraRelativePath,liveDir,liveFiles,countLive,&wasFound);
+						printf("livePathToCheck assigned\n");
+
+		
+		if((!wasFound) || IsFileNewerThan(intraPathToCheck,livePathToCheck))
+		{
+									printf("IsFileNewerThan called\n");
+
+			modifiedFiles[(*modifiedCount)] = intraPathToCheck;
+			(*modifiedCount)++;
 		}
 	}
 	
+	printf("freeing intrafiles...\n");
+	free(intraFiles);
+	//printf("freeing liveFiles...\n");
+	//free(liveFiles);
+	
 	printf("Found %d modified files in directory. \n",*modifiedCount);
 	*(log) = logBuff;
-	return files;
+	return modifiedFiles;
 	//printf("Created log message: %s",log);
 }
 
@@ -176,14 +239,36 @@ time_t getFileModifiedTime(char *path)
 	return time;
 }
 
+int IsPathDirectory(char *path) 
+{
+	printf("IsPathDirectory.\n");
+	printf("path is %s.\n",path);
+
+    struct stat attr;
+    stat(path, &attr);
+	int ans = S_ISDIR(attr.st_mode);
+	
+	if(ans)
+	{
+		printf("path IS dir.\n");
+	}
+	else
+	{
+		printf("path is NOT dir.\n");
+	}
+    return ans;
+}
+
 char* concat(const char *s1, const char *s2)
 {
-	printf("concat.\n");
+	//printf("concat.\n");
 
     char *result = malloc(strlen(s1)+strlen(s2)+1);
 
     strcpy(result, s1);
     strcat(result, s2);
+	//printf("end concat.\n");
+
     return result;
 }
 
@@ -193,34 +278,153 @@ void CopyFiles(char* files[],int count,char* srcPath,char* destPath)
 
 	char* destPaths[count];
 	
+	//printf("copyfiles count is %d\n",count);
+
 	for(int i=0;i<count;i++)
 	{
-		printf("file path to concat is %s\n",files[i]);
-		destPaths[i] = concat(destPath,LastIndexSubStr(files[i],'/'));
+		//printf("file #%d (path %s)\n",i,files[i]);
+		destPaths[i] = concat(destPath,RemoveMainPath(files[i],srcPath));
+		//printf("done file %d\n",i);
 	}
 	
+	printf("Got all destpaths\n");
+	printf("copyfiles count is %d\n",count);
+
 	for(int i=0;i<count;i++)
 	{
+		printf("file #%d (path %s)\n",i,files[i]);
+		CreateDirectoriesIfTheyDoNotExist(RemoveMainPath(files[i],srcPath),destPath);
+
 		char ch;
 		FILE* source = fopen(files[i], "r");
+					printf("fopened source.\n");
+
 		remove(destPaths[i]);
+							printf("removed.\n");
+
 		FILE* dest = fopen(destPaths[i], "w");
+							printf("fopened dest. (%s)\n",destPaths[i]);
+
 		
 		while(( ch = fgetc(source)) != EOF )
 		{
 			fputc(ch, dest);
 		}
+							printf("written.\n");
+
 
 		fclose(source);
 		fclose(dest);
+	}	
+}
+
+void CreateDirectoriesIfTheyDoNotExist(char* relativePath,char* rootPath)
+{
+	printf("CreateDirectoriesIfTheyDoNotExist\n");
+	
+	char* totalPath = concat(rootPath,relativePath);
+	printf("Total path is %s\n",totalPath);
+	
+	if(FileExists(totalPath))
+	{
+		return;
 	}
+	
+	int count = 0;
+	char** tokens = StringSplit(relativePath,"/",&count);
+	char *curPath = strdup (rootPath);
+	
+	//printf("Printing tokens from Split():\n");
+	//PrintStringArray(tokens,count);
+
+	for(int i=0;i<count-1;i++)
+	{
+		//printf("Old Curpath is %s\n",curPath);
+		//printf("token is %s\n",tokens[i]);
+
+		curPath = concat(curPath,concat(tokens[i],"/"));
+		//printf("New Curpath is %s\n",curPath);
+
+		if(!FileExists(curPath))
+		{
+			mkdir(curPath,0777);
+		}
+	}
+	
+	free(tokens);
+	free(curPath);
+}
+
+int FileExists(char *path)
+{
+	struct stat buffer;   
+	return(stat(path, &buffer) == 0);
+}	
+
+char* RemoveMainPath(char* path,char* mainPath)
+{
+	//printf("RemoveMainPath\n");
+	/*printf("path is %s\n",path);
+	printf("mainPath is %s\n",mainPath);*/
+
+	int pathLength = 0;
+	for(pathLength=0;path[pathLength]!='\0';pathLength++){};
+
+	int mainPathLength = 0;
+	for(mainPathLength=0;mainPath[mainPathLength]!='\0';mainPathLength++){};
+	
+	/*printf("pathLength is %d\n",pathLength);
+	printf("mainPathLength is %d\n",mainPathLength);*/
+
+	int outputLength = pathLength-mainPathLength;
+
+	char* output = malloc(outputLength+1);
+	memcpy(output, path+mainPathLength, outputLength);
+	output[outputLength] = '\0';
+	
+	/*printf("Removed path string length is %d\n",outputLength);
+	printf("Removed path string is %s\n",output);*/
+	//printf("end RemoveMainPath.\n");
+	return output;
+}
+
+char* GetPathFromPathListContaningThisRelativePath(char* path,char* directoryPath,char** list,int listLength,int* wasFound)
+{
+	//printf("GetPathFromPathListContaningThisRelativePath.\n");
+
+	for(int i=0;i<listLength;i++)
+	{
+		char* relativePath = RemoveMainPath(list[i],directoryPath);
+		
+		if(strcmp(path,relativePath) == 0)
+		{
+			(*wasFound) = 1;
+			return list[i];
+		}
+		
+		free(relativePath);
+	}
+	
+	(*wasFound) = 0;
+	return NULL;
+}
+
+int IsFileNewerThan(char* path1,char* path2)
+{
+	//printf("IsFileNewerThan.\n");
+
+	time_t time1 = getFileModifiedTime(path1);
+	time_t time2 = getFileModifiedTime(path2);
+	
+	int isNewer = IsTimeAfter(time1,time2);
+	return isNewer;
 }
 
 char* LastIndexSubStr(char* stringToSearch,char charToGetLastOf)
 {
-	printf("LastIndexSubStr.\n");
+	/*printf("LastIndexSubStr.\n");
 	printf("String to search is %s\n",stringToSearch);
-	printf("Char to find is %c\n",charToGetLastOf);
+	printf("Char to find is %c\n",charToGetLastOf);*/
 
 	int index = -1;
 	int i;
@@ -232,8 +436,8 @@ char* LastIndexSubStr(char* stringToSearch,char charToGetLastOf)
 		}
 	}
 	
-	printf("i is %d\n",i);
-	printf("index is %d\n",index);
+	//printf("i is %d\n",i);
+	//printf("index is %d\n",index);
 
 	if(index == -1)
 	{
@@ -243,13 +447,65 @@ char* LastIndexSubStr(char* stringToSearch,char charToGetLastOf)
 
 	int length = (i-index);
 	
-	printf("length is %d\n",length);
-	char *output = malloc(length);
+	//printf("length is %d\n",length);
+	char *output = malloc(length+1);
 	memcpy(output, stringToSearch+index+1, length);
 	output[length] = '\0';
 	
-	printf("output is %s\n",output);
+	//printf("output is %s\n",output);
 	
 	return output;
 }
 
+char** CombineStringArrays(char** s_one,int sizeOfFirstArray,char** s_two,int sizeOfSecondArray)
+{
+	int totalSize = (sizeOfFirstArray + sizeOfSecondArray);
+	
+    char **output = (char **)malloc(totalSize+1);
+
+    memcpy(output, s_one, sizeOfFirstArray * sizeof(char*));
+    memcpy(output + sizeOfFirstArray, s_two, sizeOfSecondArray * sizeof(char*));
+	
+	/*printf("sizeOfFirstArray: %d\n", sizeOfFirstArray);
+	printf("sizeOfSecondArray: %d\n", sizeOfSecondArray);
+	printf("totalSize: %d\n", totalSize);
+	
+	printf("Printing result before returning from CombineStringArrays...\n");
+	PrintStringArray(output,totalSize);*/
+	
+	return output;
+}
+
+char** StringSplit(char* string, const char* delim,int* numtokens)
+{
+    char *s = strdup(string);
+    size_t tokens_alloc = 1;
+    size_t tokens_used = 0;
+    char **tokens = calloc(tokens_alloc, sizeof(char*));
+    char *token, *strtok_ctx;
+    for (token = strtok_r(s, delim, &strtok_ctx);token != NULL;token = strtok_r(NULL, delim, &strtok_ctx))
+	{
+        if (tokens_used == tokens_alloc) 
+		{
+            tokens_alloc *= 2;
+            tokens = realloc(tokens, tokens_alloc * sizeof(char*));
+        }
+        tokens[tokens_used++] = strdup(token);
+    }
+    // cleanup
+    if (tokens_used == 0) 
+	{
+        free(tokens);
+        tokens = NULL;
+    } 
+	else 
+	{
+        tokens = realloc(tokens, tokens_used * sizeof(char*));
+    }
+	
+    *numtokens = ((int)tokens_used);
+	
+    free(s);
+	
+    return tokens;
+}

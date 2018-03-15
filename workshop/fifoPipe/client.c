@@ -10,17 +10,19 @@ int main()
 	int fifo_server,dataToSend,errorCode;
 
 	printf("Welcome to the daemon control utility. Please choose an option:\n \
-			1: Start a backup/update.\n \
+			1: Start a backup and update.\n \
 			2: Record a changelog.\n \
-			4: Shut down server.\n");
+			3: Start a backup.\n \
+			4: Start an update.\n \
+			5: Shut down server.\n");
 			
 	while(1)
 	{
 		scanf("%d",&dataToSend);
 		
-		if(dataToSend >0 && dataToSend<5) {break;}
+		if(dataToSend >0 && dataToSend<6) {break;}
 
-		printf("Please enter either 1,2,3 or 4.\n");
+		printf("Please enter either 1,2,3,4, or 5.\n");
 	}
 	
 	printf("You have selected option %d.",dataToSend);
@@ -43,5 +45,6 @@ int main()
 	
 	printf("Finished.\n");
 }
+
 
 

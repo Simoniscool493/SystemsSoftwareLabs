@@ -14,11 +14,11 @@
 
 void BackupLiveSite();
 void UpdateLiveSite();
-void LogChangesToIntraSite(int shouldCopyFiles);
+void FetchIntraSiteChangeLog();
 
 int IsTimeToBackup();
 void BackupAndUpdateIfTimeTo();
-void LogChangesToIntraSiteIfTimeTo();
+void FetchIntraSiteChangeLogIfTimeTo();
 
 void ForkFifoProcess();
 void SetToDaemon();
@@ -27,7 +27,8 @@ void Log(char* message);
 time_t mostRecentChangelogTime;
 time_t nextTimeToBackup;
 
-int changeLogIntervalInSeconds = 2;
+int changeLogIntervalInSeconds = 9999;
+int hourToBackUp = 23;
 
 char* liveDir = "/home/simon/Documents/SystemsSoftwareLabs/workshop/fifoPipe/website/liveSite/";	
 char* backupDir = "/home/simon/Documents/SystemsSoftwareLabs/workshop/fifoPipe/website/backup/";
@@ -35,9 +36,9 @@ char* intraDir = "/home/simon/Documents/SystemsSoftwareLabs/workshop/fifoPipe/we
 char* logFileLocation = "/home/simon/Documents/SystemsSoftwareLabs/workshop/fifoPipe/website/changelog.log";
 
 int main()
-{	
+{		
 	ForkFifoProcess();
-	nextTimeToBackup = GetTimeAtRelativeDay(0,10,0,0);
+	nextTimeToBackup = GetTimeAtRelativeDay(0,hourToBackUp,0);
 	mostRecentChangelogTime = GetCurrentTimeRaw();
 
 	int fifo_server = OpenFIFO("fifo_server");
@@ -68,18 +69,27 @@ int main()
 				else if(data==2)
 				{
 					printf("Manual Changelog triggered.\n");
-					LogChangesToIntraSite(0);
-				}				
+					FetchIntraSiteChangeLog();
+				}	
 				else if(data==3)
+				{
+					printf("Manual Backup triggered.\n");
+					BackupLiveSite();
+				}				
+				else if(data==4)
+				{
+					printf("Manual Update triggered.\n");
+					UpdateLiveSite();
+				}				
+				else if(data==5)
 				{
 					printf("Recieved shutdown message.\n");
 					break;
 				}
-
 			}
 			
 			BackupAndUpdateIfTimeTo();
-			LogChangesToIntraSiteIfTimeTo();
+			FetchIntraSiteChangeLogIfTimeTo();
 
 			sleep(1);
 		}
@@ -98,44 +108,40 @@ void BackupAndUpdateIfTimeTo()
 		printf("Starting scheduled backup and update of live site.\n");
 		BackupLiveSite();
 		UpdateLiveSite();
-		nextTimeToBackup = GetTimeAtRelativeDay(1,10,0,0);
+		nextTimeToBackup = GetTimeAtRelativeDay(1,hourToBackUp,0);
 	}
 }
 
-void LogChangesToIntraSiteIfTimeTo()
+void FetchIntraSiteChangeLogIfTimeTo()
 {
 	int secsPassed = difftime(GetCurrentTimeRaw(),mostRecentChangelogTime);
 	
 	if(secsPassed>changeLogIntervalInSeconds)
 	{
 		printf("%d seconds have passed. Starting scheduled changelog.\n",changeLogIntervalInSeconds);
-		LogChangesToIntraSite(0);
+		FetchIntraSiteChangeLog();
 	}
 }
 
 void UpdateLiveSite()
 {
-	LogChangesToIntraSite(1);
-}
-
-void LogChangesToIntraSite(int shouldCopyFiles)
-{	
 	int count;
 	char* changeLog;
-	char** files = GetFilesAfterTimeFromGivenDirectory(intraDir,&count,mostRecentChangelogTime,&changeLog);
+	char** files = GetModifiedFilesFromIntraToAddToLiveSite(intraDir,liveDir,&count,&changeLog);
 
 	//PrintStringArray(files,count);
 	
 	if(count>0)
 	{		
-		if(shouldCopyFiles)
-		{
-			CopyFiles(files,count,intraDir,liveDir);
-		}
-		
+		CopyFiles(files,count,intraDir,liveDir);
 		Log(changeLog);
 	}
 	
+	free(files);
+}
+
+void FetchIntraSiteChangeLog()
+{	
 	mostRecentChangelogTime = GetCurrentTimeRaw();
 }
 
@@ -156,6 +162,7 @@ void BackupLiveSite()
 	CopyFiles(files,count,liveDir,backupDir);
 	
 	//flock(sourceDir, LOCK_UN);
+	free(files);
 }
 
 void SetToDaemon()
@@ -217,4 +224,5 @@ int IsTimeToBackup()
 	
 	return 0;
 }
+
 
