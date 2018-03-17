@@ -24,6 +24,7 @@ int IsPathDirectory(char *path);
 char** StringSplit(char* string, const char* delimiter,int* totalCount);
 int FileExists(char *path);
 
+
 void PrintStringArray(char* stringArray[],int length)
 {
 	printf("PrintStringArray.\n");
@@ -32,6 +33,8 @@ void PrintStringArray(char* stringArray[],int length)
 	{
 		printf("\t%s\n",stringArray[i]);
 	}
+	
+	printf("Done print string array!\n");
 }
 
 char** GetFilesFromGivenDirectory(char* path,int* fileCount)
@@ -94,7 +97,6 @@ char** GetFilesFromGivenDirectory(char* path,int* fileCount)
 		
 		printf("printing combined string array\n");
 		PrintStringArray(files,numFiles);
-		free(folderContents);
 	}
 	
 	printf("Filecount is %d\n",numFiles);
@@ -108,10 +110,23 @@ char** GetFilesFromGivenDirectory(char* path,int* fileCount)
 		printf("In getFiles, first file was not found because there aren't any.");
 	}
 	
-	free(dirs);
+	printf("Freeing dirs...\n");
+	
+	FreeStringArray(dirs,numDirs);
+	printf("Freed dirs.\n");
 	
 	(*fileCount) = numFiles;
 	return files;
+}
+
+void FreeStringArray(char** stringArray,int count)
+{
+	for(int i=0;i<count;i++)
+	{
+		free(stringArray[i]);
+	}
+	
+	free(stringArray);
 }
 
 char** GetModifiedFilesFromIntraToAddToLiveSite(char* intraDir,char* liveDir,int* modifiedCount,char** log)
@@ -156,20 +171,47 @@ char** GetModifiedFilesFromIntraToAddToLiveSite(char* intraDir,char* liveDir,int
 		{
 									printf("IsFileNewerThan called\n");
 
-			modifiedFiles[(*modifiedCount)] = intraPathToCheck;
+			modifiedFiles[(*modifiedCount)] = strdup(intraPathToCheck);
+			printf("Adding intra path: %s.\n",intraPathToCheck);
+
 			(*modifiedCount)++;
+			
+			time_t fileModTime = getFileModifiedTime(intraPathToCheck);
+			char buff[20];
+ 			strftime(buff,20,"%Y-%m-%d %H:%M:%S",localtime(&fileModTime));
+			char* logMessage = concat(intraPathToCheck,concat("\n\tEdited on ",buff));
+			logBuff = concat(logBuff,logMessage);
 		}
 	}
 	
+	printf("First file is %s. (before freeing)\n",modifiedFiles[0]);
+
 	printf("freeing intrafiles...\n");
-	free(intraFiles);
+	FreeStringArray(intraFiles,countIntra);
+
 	//printf("freeing liveFiles...\n");
 	//free(liveFiles);
 	
 	printf("Found %d modified files in directory. \n",*modifiedCount);
+	printf("First file is %s.\n",modifiedFiles[0]);
+
+	logBuff = concat(logBuff,"\n\n");
 	*(log) = logBuff;
 	return modifiedFiles;
 	//printf("Created log message: %s",log);
+}
+
+void LockAllFilesInDirectory(char* path)
+{
+	int count =0;
+	char** files = GetFilesFromGivenDirectory(path,&count);
+	
+	for(int i=0;i<count;i++)
+	{
+		chmod(files[i],0444);
+	}
+	
+	FreeStringArray(files,count);
 }
 
 int IsNotDirectoryPointer(char* fileName)
@@ -278,21 +320,21 @@ void CopyFiles(char* files[],int count,char* srcPath,char* destPath)
 
 	char* destPaths[count];
 	
-	//printf("copyfiles count is %d\n",count);
+	printf("1# copyfiles count is %d\n",count);
 
 	for(int i=0;i<count;i++)
 	{
-		//printf("file #%d (path %s)\n",i,files[i]);
+		printf("1# file #%d (path %s)\n",i,files[i]);
 		destPaths[i] = concat(destPath,RemoveMainPath(files[i],srcPath));
-		//printf("done file %d\n",i);
+		printf("1# done file %d\n",i);
 	}
 	
 	printf("Got all destpaths\n");
-	printf("copyfiles count is %d\n",count);
+	printf("2# copyfiles count is %d\n",count);
 
 	for(int i=0;i<count;i++)
 	{
-		printf("file #%d (path %s)\n",i,files[i]);
+		printf("2# file #%d (path %s)\n",i,files[i]);
 		CreateDirectoriesIfTheyDoNotExist(RemoveMainPath(files[i],srcPath),destPath);
 
 		char ch;
@@ -303,7 +345,7 @@ void CopyFiles(char* files[],int count,char* srcPath,char* destPath)
 							printf("removed.\n");
 
 		FILE* dest = fopen(destPaths[i], "w");
-							printf("fopened dest. (%s)\n",destPaths[i]);
+							printf("2# fopened dest. (%s)\n",destPaths[i]);
 
 		
 		while(( ch = fgetc(source)) != EOF )
@@ -351,7 +393,7 @@ void CreateDirectoriesIfTheyDoNotExist(char* relativePath,char* rootPath)
 		}
 	}
 	
-	free(tokens);
+	FreeStringArray(tokens,count);
 	free(curPath);
 }
 
@@ -459,22 +501,32 @@ char* LastIndexSubStr(char* stringToSearch,char charToGetLastOf)
 
 char** CombineStringArrays(char** s_one,int sizeOfFirstArray,char** s_two,int sizeOfSecondArray)
 {
-	int totalSize = (sizeOfFirstArray + sizeOfSecondArray);
+    char **output = malloc((sizeOfFirstArray + sizeOfSecondArray)*sizeof(char*));
 	
-    char **output = (char **)malloc(totalSize+1);
+	for(int i=0;i<sizeOfFirstArray;i++)
+	{
+		output[i] = strdup(s_one[i]);
+	}
+	
+	for(int i=0;i<sizeOfSecondArray;i++)
+	{
+		output[i+sizeOfFirstArray] = strdup(s_two[i]);
+	}
 
-    memcpy(output, s_one, sizeOfFirstArray * sizeof(char*));
-    memcpy(output + sizeOfFirstArray, s_two, sizeOfSecondArray * sizeof(char*));
+	FreeStringArray(s_one,sizeOfFirstArray);
+	FreeStringArray(s_two,sizeOfSecondArray);
 	
-	/*printf("sizeOfFirstArray: %d\n", sizeOfFirstArray);
+	printf("sizeOfFirstArray: %d\n", sizeOfFirstArray);
 	printf("sizeOfSecondArray: %d\n", sizeOfSecondArray);
-	printf("totalSize: %d\n", totalSize);
+	printf("totalSize: %d\n", sizeOfFirstArray+sizeOfSecondArray);
 	
 	printf("Printing result before returning from CombineStringArrays...\n");
-	PrintStringArray(output,totalSize);*/
+	PrintStringArray(output,sizeOfFirstArray+sizeOfSecondArray);
 	
 	return output;
 }
+
+
 
 char** StringSplit(char* string, const char* delim,int* numtokens)
 {

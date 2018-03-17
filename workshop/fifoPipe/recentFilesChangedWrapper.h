@@ -12,7 +12,8 @@ int GetFileCountFromGivenDirectory(char* path);
 void PrintStringArray(char* stringArray[],int length);
 void CopyFiles(char* files[],int count,char* srcPath,char* destPath);
 void CreateDirectoriesIfTheyDoNotExist(char* relativePath,char* rootPath);
-
+void LockAllFilesInDirectory(char* path);
+void FreeStringArray(char** stringArray,int count);
 
 #endif
 

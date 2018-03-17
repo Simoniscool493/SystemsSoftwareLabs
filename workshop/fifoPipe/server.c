@@ -53,6 +53,10 @@ int main()
 	{
 		SetToDaemon();
 		
+		printf("Locking live directory...\n");
+		//LockAllFilesInDirectory(liveDir);
+		printf("Live directory locked.\n");
+
 		while(1)
 		{			
 			if (poll(&(struct pollfd){ .fd = fifo_server, .events = POLLIN }, 1, 0)==1) 
@@ -137,7 +141,7 @@ void UpdateLiveSite()
 		Log(changeLog);
 	}
 	
-	free(files);
+	FreeStringArray(files,count);
 }
 
 void FetchIntraSiteChangeLog()
@@ -162,7 +166,7 @@ void BackupLiveSite()
 	CopyFiles(files,count,liveDir,backupDir);
 	
 	//flock(sourceDir, LOCK_UN);
-	free(files);
+	FreeStringArray(files,count);
 }
 
 void SetToDaemon()
@@ -184,6 +188,14 @@ void SetToDaemon()
 		printf("Daemon Error: Could not set wd to root. Error code %d\n",errorCode);
 		exit(EXIT_FAILURE);
 	}
+
+	errorCode = setuid(geteuid());
+	if(errorCode < 0)
+	{
+		printf("Daemon Error: Could not set uid to root. Error code %d\n",errorCode);
+		exit(EXIT_FAILURE);
+	}
+	
 }
 
 void Log(char* message)
