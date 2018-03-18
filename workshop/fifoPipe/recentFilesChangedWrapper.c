@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <assert.h>
+#include <syslog.h>
 
 #include "recentFilesChangedWrapper.h"
 #include "timeWrapper.h"
@@ -253,6 +254,7 @@ int GetFileCountFromGivenDirectory(char* path)
 	
 	if(count<0)
 	{
+		syslog(LOG_DAEMON, "Scandir error code: %d",count);
 		printf("Scandir error code: %d",count);
 	}
 	
@@ -273,6 +275,7 @@ time_t getFileModifiedTime(char *path)
 	
 	if(errorCode<0)
 	{
+		syslog(LOG_DAEMON, "stat() error code: %d",errorCode);
 		printf("stat() error code: %d",errorCode);
 	}
 
@@ -526,8 +529,6 @@ char** CombineStringArrays(char** s_one,int sizeOfFirstArray,char** s_two,int si
 	return output;
 }
 
-
-
 char** StringSplit(char* string, const char* delim,int* numtokens)
 {
     char *s = strdup(string);
@@ -561,3 +562,4 @@ char** StringSplit(char* string, const char* delim,int* numtokens)
 	
     return tokens;
 }
+

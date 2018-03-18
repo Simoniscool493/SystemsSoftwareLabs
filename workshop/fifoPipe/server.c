@@ -7,6 +7,8 @@
 #include <sys/wait.h> 
 #include <sys/file.h>
 #include <poll.h>
+#include <syslog.h>
+#include <string.h>
 
 #include "fifoWrapper.h"
 #include "recentFilesChangedWrapper.h"
@@ -30,13 +32,18 @@ time_t nextTimeToBackup;
 int changeLogIntervalInSeconds = 9999;
 int hourToBackUp = 23;
 
-char* liveDir = "/home/simon/Documents/SystemsSoftwareLabs/workshop/fifoPipe/website/liveSite/";	
-char* backupDir = "/home/simon/Documents/SystemsSoftwareLabs/workshop/fifoPipe/website/backup/";
-char* intraDir = "/home/simon/Documents/SystemsSoftwareLabs/workshop/fifoPipe/website/intra/";
-char* logFileLocation = "/home/simon/Documents/SystemsSoftwareLabs/workshop/fifoPipe/website/changelog.log";
+char* liveDir = "/var/www/html/liveSite/";	
+char* backupDir = "/var/www/html/backup/";
+char* intraDir = "/var/www/html/intra/";
+char* updateLogFileLocation = "/var/www/html/updateLog.log";
+char* changeLogFileLocation = "/var/www/html/changeLog.log";
+char* auditLogFleLocation = "/var/log/audit/audit.log";
+char* watchedDirectory = "var/www/html";
 
 int main()
 {		
+	openlog("SystemsSoftwareAssignmentProgramServer", LOG_CONS | LOG_PID | LOG_NDELAY, LOG_LOCAL1);
+	
 	ForkFifoProcess();
 	nextTimeToBackup = GetTimeAtRelativeDay(0,hourToBackUp,0);
 	mostRecentChangelogTime = GetCurrentTimeRaw();
@@ -146,6 +153,49 @@ void UpdateLiveSite()
 
 void FetchIntraSiteChangeLog()
 {	
+	FILE * auditFile = fopen(auditLogFleLocation, "r");
+	printf("Audit file opened, value of %d\n",auditFile);
+	
+	FILE * changeLog = fopen(changeLogFileLocation, "w");
+	printf("Changelog file opened, value of %d\n",changeLog);
+
+	char * line = NULL;
+	size_t len = 0;
+	ssize_t read;
+
+	if (auditFile < 0)
+	{
+		printf("File error code: %d\n",auditFile);
+		exit(EXIT_FAILURE);
+	}
+	
+	int count = 0;
+	printf("Fetching and writing data...\n");
+
+	while ((read = getline(&line, &len, auditFile)) != -1) 
+	{
+		if(
+			(strstr(line,watchedDirectory) != NULL) /*&&
+		    (strstr(line," auid=") != NULL)*/
+		)
+		{
+			fprintf(changeLog,line);
+			count++;
+		}
+	}
+
+	printf("Finiahed writing data.\n");
+
+	fclose(auditFile);
+	fclose(changeLog);
+
+	if (line)
+	{
+		free(line);
+	}
+	
+	printf("Total count: %d\n",count);
+
 	mostRecentChangelogTime = GetCurrentTimeRaw();
 }
 
@@ -176,6 +226,7 @@ void SetToDaemon()
 	int errorCode = setsid();
 	if(errorCode < 0)
 	{
+		syslog(LOG_DAEMON, "Daemon Error: Could not elevate. Error code %d\n",errorCode);
 		printf("Daemon Error: Could not elevate. Error code %d\n",errorCode);
 		exit(EXIT_FAILURE);
 	}
@@ -185,6 +236,7 @@ void SetToDaemon()
 	errorCode = chdir("/");
 	if(errorCode < 0)
 	{
+		syslog(LOG_DAEMON, "Daemon Error: Could not set wd to root. Error code %d\n",errorCode);
 		printf("Daemon Error: Could not set wd to root. Error code %d\n",errorCode);
 		exit(EXIT_FAILURE);
 	}
@@ -192,6 +244,7 @@ void SetToDaemon()
 	errorCode = setuid(geteuid());
 	if(errorCode < 0)
 	{
+		syslog(LOG_DAEMON, "Daemon Error: Could not set uid to root. Error code %d\n",errorCode);
 		printf("Daemon Error: Could not set uid to root. Error code %d\n",errorCode);
 		exit(EXIT_FAILURE);
 	}
@@ -203,7 +256,7 @@ void Log(char* message)
 	printf("Log.\n");
 
 	FILE* fp;
-	fp = fopen(logFileLocation,"a");
+	fp = fopen(updateLogFileLocation,"a");
 	fprintf(fp,message);
 	fclose(fp);
 }
@@ -236,5 +289,6 @@ int IsTimeToBackup()
 	
 	return 0;
 }
+
 
 

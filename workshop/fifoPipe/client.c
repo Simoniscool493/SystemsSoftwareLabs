@@ -2,12 +2,14 @@
 #include<fcntl.h>
 #include<stdlib.h>
 #include <unistd.h>
+#include <syslog.h>
 
 #include "fifoWrapper.h"
 
 int main()
 {
 	int fifo_server,dataToSend,errorCode;
+	openlog("SystemsSoftwareAssignmentProgramClient", LOG_CONS | LOG_PID | LOG_NDELAY, LOG_LOCAL1);
 
 	printf("Welcome to the daemon control utility. Please choose an option:\n \
 			1: Start a backup and update.\n \
@@ -33,6 +35,7 @@ int main()
 	
 	if(errorCode<0)
 	{
+		syslog(LOG_USER, "FIFO write error code: %d\n",errorCode);
 		printf("FIFO write error code: %d\n",errorCode);
 	}
 	
@@ -40,11 +43,13 @@ int main()
 	
 	if(errorCode<0)
 	{
+		syslog(LOG_USER, "FIFO close error code: %d\n",errorCode);
 		printf("FIFO close error code: %d\n",errorCode);
 	}
 	
 	printf("Finished.\n");
 }
+
 
 
 

@@ -5,6 +5,7 @@
 #include<fcntl.h>
 #include<stdlib.h>
 #include<sys/stat.h>
+#include<syslog.h>
 
 int ReadFIFO(int fileHandle)
 {
@@ -13,6 +14,7 @@ int ReadFIFO(int fileHandle)
 	
 	if(errorCode<0)
 	{
+		syslog(LOG_USER, "FIFO read error code: %d\n",errorCode);
 		printf("FIFO read error code: %d\n",errorCode);
 		exit(-1);
 	}
@@ -29,6 +31,7 @@ int OpenFIFO(const char* path)
 
 	if(fileHandle<1) 
 	{
+		syslog(LOG_USER, "FIFO open error code: %d\n",fileHandle);
 		printf("FIFO open error code: %d\n",fileHandle);
 	}
 	
@@ -39,13 +42,15 @@ int CreateFIFO(const char* path)
 {
 	int fileHandler = mkfifo(path,0666); 
 
+	//No error code here because mkfifo fails if the fole already exists, which will be true the majority of the time
+
 	if(fileHandler<0) 
 	{
-		printf("FIFO create error code: %d\n",fileHandler);
-		exit(-1);
+		exit(0);
 	}
 	
 	return fileHandler;
 }
+
 
 
