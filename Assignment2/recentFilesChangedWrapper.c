@@ -21,7 +21,6 @@ char* GetPathFromPathListContaningThisRelativePath(char* path,char* directoryPat
 int IsFileNewerThan(char* path1,char* path2);
 char** CombineStringArrays(char** s_one,int sizeOfFirstArray,char** s_two,int sizeOfSecondArray);
 int IsPathDirectory(char *path);
-char** StringSplit(char* string, const char* delimiter,int* totalCount);
 int FileExists(char *path);
 
 void PrintStringArray(char* stringArray[],int length)

@@ -15,6 +15,7 @@ void CreateDirectoriesIfTheyDoNotExist(char* relativePath,char* rootPath);
 void LockAllFilesInDirectory(char* path);
 void FreeStringArray(char** stringArray,int count);
 char* concat(const char *s1, const char *s2);
+char** StringSplit(char* string, const char* delimiter,int* totalCount);
 
 #endif
 
